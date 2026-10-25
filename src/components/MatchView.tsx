@@ -28,16 +28,21 @@ export function MatchView(): React.ReactElement | null {
   const rafRef = useRef<number>(0);
   const [isMobile] = useState(isMobileDevice);
 
+  // Create engine on first render so match exists immediately
+  const [engine] = useState(() => {
+    const eng = new GameEngine({ pitchWidth: PITCH_W, pitchHeight: PITCH_H });
+    eng.start();
+    return eng;
+  });
+  engineRef.current = engine;
+
   const resetMatch = useCallback(() => {
-    const eng = engineRef.current;
-    if (eng) eng.reset();
+    engine.reset();
   }, []);
 
   const togglePause = useCallback(() => {
-    const eng = engineRef.current;
-    if (!eng) return;
-    if (eng.match.phase === 'ended') {
-      eng.reset();
+    if (engine.match.phase === 'ended') {
+      engine.reset();
     }
   }, []);
 
@@ -45,13 +50,10 @@ export function MatchView(): React.ReactElement | null {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    // Ensure canvas fills its container
     canvas.style.display = 'block';
     canvas.style.width = '100%';
     canvas.style.height = '100%';
 
-    const engine = new GameEngine({ pitchWidth: PITCH_W, pitchHeight: PITCH_H });
-    engineRef.current = engine;
     const kb = new KeyboardControls(engine.input);
     kbRef.current = kb;
     kb.connect();
@@ -61,31 +63,38 @@ export function MatchView(): React.ReactElement | null {
     scene.fog = new THREE.Fog(0x0b160f, 200, 1000);
     sceneRef.current = scene;
 
-    // Measure actual canvas size for renderer
     const updateSize = () => {
       const cam = cameraRef.current;
       const ren = rendererRef.current;
       if (!cam || !ren) return;
-      const { clientWidth, clientHeight } = canvas;
+      const cw = canvas.clientWidth || PITCH_W;
+      const ch = canvas.clientHeight || PITCH_H;
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      cam.aspect = clientWidth / clientHeight;
+      cam.aspect = cw / ch;
       cam.updateProjectionMatrix();
-      ren.setSize(clientWidth, clientHeight, false);
+      ren.setSize(cw, ch, false);
     };
 
-    const camera = new THREE.PerspectiveCamera(60, canvas.clientWidth / canvas.clientHeight || PITCH_W / PITCH_H, 0.1, 2000);
+    const camera = new THREE.PerspectiveCamera(
+      60,
+      (canvas.clientWidth || PITCH_W) / (canvas.clientHeight || PITCH_H),
+      0.1,
+      2000
+    );
     camera.position.set(525, 600, 750);
     camera.lookAt(PITCH_W / 2, 0, PITCH_H / 2);
     cameraRef.current = camera;
 
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
-    renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
+    const cw = canvas.clientWidth || PITCH_W;
+    const ch = canvas.clientHeight || PITCH_H;
+    renderer.setSize(cw, ch, false);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     rendererRef.current = renderer;
 
-    // Lights - bright enough to see everything
+    // Lights - bright
     const hemi = new THREE.HemisphereLight(0x88cc88, 0x444444, 0.9);
     scene.add(hemi);
     const ambient = new THREE.AmbientLight(0xffffff, 0.7);
@@ -103,7 +112,7 @@ export function MatchView(): React.ReactElement | null {
     dirLight.shadow.camera.far = 1200;
     scene.add(dirLight);
 
-    // Pitch plane - flat on XZ, centered at pitch center
+    // Pitch plane - centered at pitch center
     const pitchGeo = new THREE.PlaneGeometry(PITCH_W, PITCH_H);
     pitchGeo.rotateX(-Math.PI / 2);
     const pitch = new THREE.Mesh(
@@ -114,7 +123,7 @@ export function MatchView(): React.ReactElement | null {
     pitch.receiveShadow = true;
     scene.add(pitch);
 
-    // Grid helper so the pitch is unmistakably visible
+    // Grid helper so pitch is unmistakably visible
     const grid = new THREE.GridHelper(PITCH_W, 21, 0x22c55e, 0x1a3a28);
     grid.position.set(PITCH_W / 2, 0.01, PITCH_H / 2);
     grid.rotation.x = -Math.PI / 2;
@@ -142,16 +151,7 @@ export function MatchView(): React.ReactElement | null {
     addLine(PITCH_W - 80, PITCH_H / 2, 160, 180);
 
     // Center circle
-    const curve = new THREE.EllipseCurve(
-      PITCH_W / 2,
-      PITCH_H / 2,
-      90,
-      90,
-      0,
-      2 * Math.PI,
-      false,
-      0
-    );
+    const curve = new THREE.EllipseCurve(PITCH_W / 2, PITCH_H / 2, 90, 90, 0, 2 * Math.PI, false, 0);
     const circlePts = curve.getPoints(64);
     const circleGeo = new THREE.BufferGeometry().setFromPoints(
       circlePts.map((p: THREE.Vector2) => new THREE.Vector3(p.x, 0.055, p.y))
@@ -169,11 +169,7 @@ export function MatchView(): React.ReactElement | null {
     scene.add(centerSpot);
 
     // Goals
-    const goalMat = new THREE.MeshStandardMaterial({
-      color: 0xffffff,
-      transparent: true,
-      opacity: 0.5,
-    });
+    const goalMat = new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: 0.5 });
     const goalBox = new THREE.BoxGeometry(18, 8, 76);
     const goalHome = new THREE.Mesh(goalBox, goalMat);
     goalHome.position.set(PITCH_W + 9, 4, PITCH_H / 2);
@@ -183,12 +179,7 @@ export function MatchView(): React.ReactElement | null {
     scene.add(goalAway);
 
     // Goal nets
-    const netMat = new THREE.MeshBasicMaterial({
-      color: 0xffffff,
-      transparent: true,
-      opacity: 0.2,
-      wireframe: true,
-    });
+    const netMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.2, wireframe: true });
     const netGeo = new THREE.BoxGeometry(18, 8, 76);
     const netHome = new THREE.Mesh(netGeo, netMat);
     netHome.position.set(PITCH_W + 9, 4, PITCH_H / 2);
@@ -197,7 +188,7 @@ export function MatchView(): React.ReactElement | null {
     netAway.position.set(-9, 4, PITCH_H / 2);
     scene.add(netAway);
 
-    // Helper: build a 3D player mesh
+    // Build a 3D player mesh (cylinder body + sphere head + ring tag)
     const buildPlayerMesh = (teamColor: number) => {
       const group = new THREE.Group();
 
@@ -229,14 +220,9 @@ export function MatchView(): React.ReactElement | null {
       return group;
     };
 
-    const allPlayers = [
-      ...engine.match.home.players,
-      ...engine.match.away.players,
-    ];
+    const allPlayers = [...engine.match.home.players, ...engine.match.away.players];
     allPlayers.forEach((p) => {
-      const mesh = buildPlayerMesh(
-        p.team === 'home' ? 0x22c55e : 0x38bdf8
-      );
+      const mesh = buildPlayerMesh(p.team === 'home' ? 0x22c55e : 0x38bdf8);
       mesh.position.set(p.pos.x, 0, p.pos.y);
       mesh.rotation.y = p.direction;
       mesh.castShadow = true;
@@ -249,11 +235,7 @@ export function MatchView(): React.ReactElement | null {
       new THREE.SphereGeometry(0.8, 22, 22),
       new THREE.MeshStandardMaterial({ color: 0xfacc15 })
     );
-    ballMesh.position.set(
-      engine.match.ball.pos.x,
-      0.8,
-      engine.match.ball.pos.y
-    );
+    ballMesh.position.set(engine.match.ball.pos.x, 0.8, engine.match.ball.pos.y);
     ballMesh.castShadow = true;
     scene.add(ballMesh);
     ballMeshRef.current = ballMesh;
@@ -264,19 +246,18 @@ export function MatchView(): React.ReactElement | null {
     // Single game loop: update logic + render
     let last = performance.now();
     const tick = () => {
-      const eng = engineRef.current;
       const cam = cameraRef.current;
       const ren = rendererRef.current;
       const scn = sceneRef.current;
-      if (!eng || !cam || !ren || !scn) return;
+      if (!cam || !ren || !scn) return;
 
       const now = performance.now();
       const dt = Math.min((now - last) / 1000, 0.1);
       last = now;
 
-      eng.tick();
+      engine.tick();
 
-      const match = eng.match;
+      const match = engine.match;
 
       // Update player meshes
       for (const p of [...match.home.players, ...match.away.players]) {
@@ -288,11 +269,7 @@ export function MatchView(): React.ReactElement | null {
         const mat = body.material as THREE.MeshStandardMaterial;
         const isControlled = p.id === match.controlledPlayerId;
         mat.color.setHex(
-          isControlled
-            ? 0xfbbf24
-            : p.team === 'home'
-              ? 0x22c55e
-              : 0x38bdf8
+          isControlled ? 0xfbbf24 : p.team === 'home' ? 0x22c55e : 0x38bdf8
         );
         const bob = Math.sin(now * 0.008) * 0.06;
         mesh.position.y = bob;
@@ -321,10 +298,9 @@ export function MatchView(): React.ReactElement | null {
       window.removeEventListener('resize', updateSize);
       rendererRef.current?.dispose();
     };
-  }, []);
+  }, [engine]);
 
-  const match = engineRef.current?.match;
-  if (!match) return null;
+  const match = engine.match;
 
   return (
     <div
@@ -343,7 +319,7 @@ export function MatchView(): React.ReactElement | null {
         togglePause={togglePause}
         resetMatch={resetMatch}
       />
-      {isMobile && <MobileControls input={engineRef.current?.input} />}
+      {isMobile && <MobileControls input={engine.input} />}
     </div>
   );
 }
