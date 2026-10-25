@@ -193,16 +193,15 @@ export class GameEngine {
 
   private loop(): void {
     if (!this.running) return;
+    this.tick();
+    this.animId = requestAnimationFrame(() => this.loop());
+  }
+
+  public tick(): void {
     const now = performance.now();
     let dt = (now - this.lastTime) / 1000;
     this.lastTime = now;
     dt = Math.min(dt, 0.1);
-
-    this.update(dt);
-    this.animId = requestAnimationFrame(() => this.loop());
-  }
-
-  private update(dt: number): void {
     const { match, config, input } = this;
     const { home, away, ball } = match;
     const { pitchWidth, pitchHeight, playerRadius, kickableRadius, tackleRadius, ballSpeed, passSpeed, shootSpeed } = config;
