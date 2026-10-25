@@ -45,6 +45,7 @@ export function MatchView(): React.ReactElement | null {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
+    // Ensure canvas fills its container
     canvas.style.display = 'block';
     canvas.style.width = '100%';
     canvas.style.height = '100%';
@@ -56,82 +57,87 @@ export function MatchView(): React.ReactElement | null {
     kb.connect();
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x020503);
-    scene.fog = new THREE.Fog(0x020503, 300, 1100);
+    scene.background = new THREE.Color(0x0b160f);
+    scene.fog = new THREE.Fog(0x0b160f, 200, 1000);
     sceneRef.current = scene;
 
-    const camera = new THREE.PerspectiveCamera(55, PITCH_W / PITCH_H, 0.1, 2000);
-    camera.position.set(525, 560, 700);
-    camera.lookAt(525, 0, 340);
+    // Measure actual canvas size for renderer
+    const updateSize = () => {
+      const cam = cameraRef.current;
+      const ren = rendererRef.current;
+      if (!cam || !ren) return;
+      const { clientWidth, clientHeight } = canvas;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      cam.aspect = clientWidth / clientHeight;
+      cam.updateProjectionMatrix();
+      ren.setSize(clientWidth, clientHeight, false);
+    };
+
+    const camera = new THREE.PerspectiveCamera(60, canvas.clientWidth / canvas.clientHeight || PITCH_W / PITCH_H, 0.1, 2000);
+    camera.position.set(525, 600, 750);
+    camera.lookAt(PITCH_W / 2, 0, PITCH_H / 2);
     cameraRef.current = camera;
 
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    renderer.setSize(PITCH_W, PITCH_H);
-    renderer.setPixelRatio(dpr);
+    renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     rendererRef.current = renderer;
 
-    // Lights
-    const hemi = new THREE.HemisphereLight(0x88cc88, 0x222233, 0.7);
+    // Lights - bright enough to see everything
+    const hemi = new THREE.HemisphereLight(0x88cc88, 0x444444, 0.9);
     scene.add(hemi);
-    const ambient = new THREE.AmbientLight(0xffffff, 0.5);
+    const ambient = new THREE.AmbientLight(0xffffff, 0.7);
     scene.add(ambient);
-    const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
-    dirLight.position.set(200, 450, 150);
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+    dirLight.position.set(300, 500, 300);
     dirLight.castShadow = true;
     dirLight.shadow.mapSize.width = 2048;
     dirLight.shadow.mapSize.height = 2048;
-    dirLight.shadow.camera.left = -400;
-    dirLight.shadow.camera.right = 400;
-    dirLight.shadow.camera.top = 400;
-    dirLight.shadow.camera.bottom = -400;
+    dirLight.shadow.camera.left = -500;
+    dirLight.shadow.camera.right = 500;
+    dirLight.shadow.camera.top = 500;
+    dirLight.shadow.camera.bottom = -500;
     dirLight.shadow.camera.near = 1;
-    dirLight.shadow.camera.far = 1000;
+    dirLight.shadow.camera.far = 1200;
     scene.add(dirLight);
 
-    // Pitch plane — centered at middle of play area (525, 0, 340)
+    // Pitch plane - flat on XZ, centered at pitch center
     const pitchGeo = new THREE.PlaneGeometry(PITCH_W, PITCH_H);
     pitchGeo.rotateX(-Math.PI / 2);
     const pitch = new THREE.Mesh(
       pitchGeo,
-      new THREE.MeshStandardMaterial({ color: 0x0d2b1c })
+      new THREE.MeshStandardMaterial({ color: 0x0f3020 })
     );
     pitch.position.set(PITCH_W / 2, 0, PITCH_H / 2);
     pitch.receiveShadow = true;
     scene.add(pitch);
 
-    // Grass stripe variation
-    const stripeGeo = new THREE.PlaneGeometry(PITCH_W, PITCH_H);
-    stripeGeo.rotateX(-Math.PI / 2);
-    const stripeMat = new THREE.MeshStandardMaterial({
-      color: 0x081e14,
-      transparent: true,
-      opacity: 0.5,
-    });
-    const stripes = new THREE.Mesh(stripeGeo, stripeMat);
-    stripes.position.set(PITCH_W / 2, 0.02, PITCH_H / 2);
-    scene.add(stripes);
+    // Grid helper so the pitch is unmistakably visible
+    const grid = new THREE.GridHelper(PITCH_W, 21, 0x22c55e, 0x1a3a28);
+    grid.position.set(PITCH_W / 2, 0.01, PITCH_H / 2);
+    grid.rotation.x = -Math.PI / 2;
+    scene.add(grid);
 
     // Pitch markings
     const lineMat = new THREE.MeshBasicMaterial({
       color: 0xffffff,
       transparent: true,
-      opacity: 0.5,
+      opacity: 0.6,
     });
     const addLine = (x: number, z: number, w: number, h: number) => {
       const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), lineMat);
-      m.position.set(x, 0.06, z);
+      m.position.set(x, 0.05, z);
       m.rotation.x = -Math.PI / 2;
       m.receiveShadow = true;
       scene.add(m);
     };
-    addLine(PITCH_W / 2, 0, PITCH_W, 4);
-    addLine(PITCH_W / 2, PITCH_H, PITCH_W, 4);
-    addLine(0, PITCH_H / 2, 4, PITCH_H);
-    addLine(PITCH_W, PITCH_H / 2, 4, PITCH_H);
-    addLine(PITCH_W / 2, PITCH_H / 2, 4, PITCH_H);
+    addLine(PITCH_W / 2, 0, PITCH_W, 3);
+    addLine(PITCH_W / 2, PITCH_H, PITCH_W, 3);
+    addLine(0, PITCH_H / 2, 3, PITCH_H);
+    addLine(PITCH_W, PITCH_H / 2, 3, PITCH_H);
+    addLine(PITCH_W / 2, PITCH_H / 2, 3, PITCH_H);
     addLine(80, PITCH_H / 2, 160, 180);
     addLine(PITCH_W - 80, PITCH_H / 2, 160, 180);
 
@@ -148,17 +154,17 @@ export function MatchView(): React.ReactElement | null {
     );
     const circlePts = curve.getPoints(64);
     const circleGeo = new THREE.BufferGeometry().setFromPoints(
-      circlePts.map((p: THREE.Vector2) => new THREE.Vector3(p.x, 0.065, p.y))
+      circlePts.map((p: THREE.Vector2) => new THREE.Vector3(p.x, 0.055, p.y))
     );
     const circleLine = new THREE.LineLoop(circleGeo, lineMat);
     scene.add(circleLine);
 
     // Center spot
     const centerSpot = new THREE.Mesh(
-      new THREE.CircleGeometry(2, 16),
+      new THREE.CircleGeometry(2.5, 16),
       new THREE.MeshBasicMaterial({ color: 0xffffff })
     );
-    centerSpot.position.set(PITCH_W / 2, 0.07, PITCH_H / 2);
+    centerSpot.position.set(PITCH_W / 2, 0.06, PITCH_H / 2);
     centerSpot.rotation.x = -Math.PI / 2;
     scene.add(centerSpot);
 
@@ -166,29 +172,29 @@ export function MatchView(): React.ReactElement | null {
     const goalMat = new THREE.MeshStandardMaterial({
       color: 0xffffff,
       transparent: true,
-      opacity: 0.4,
+      opacity: 0.5,
     });
-    const goalBox = new THREE.BoxGeometry(16, 7, 74);
+    const goalBox = new THREE.BoxGeometry(18, 8, 76);
     const goalHome = new THREE.Mesh(goalBox, goalMat);
-    goalHome.position.set(PITCH_W + 8, 3.5, PITCH_H / 2);
+    goalHome.position.set(PITCH_W + 9, 4, PITCH_H / 2);
     scene.add(goalHome);
     const goalAway = goalHome.clone();
-    goalAway.position.set(-8, 3.5, PITCH_H / 2);
+    goalAway.position.set(-9, 4, PITCH_H / 2);
     scene.add(goalAway);
 
     // Goal nets
     const netMat = new THREE.MeshBasicMaterial({
       color: 0xffffff,
       transparent: true,
-      opacity: 0.18,
+      opacity: 0.2,
       wireframe: true,
     });
-    const netGeo = new THREE.BoxGeometry(16, 7, 74);
+    const netGeo = new THREE.BoxGeometry(18, 8, 76);
     const netHome = new THREE.Mesh(netGeo, netMat);
-    netHome.position.set(PITCH_W + 8, 3.5, PITCH_H / 2);
+    netHome.position.set(PITCH_W + 9, 4, PITCH_H / 2);
     scene.add(netHome);
     const netAway = netHome.clone();
-    netAway.position.set(-8, 3.5, PITCH_H / 2);
+    netAway.position.set(-9, 4, PITCH_H / 2);
     scene.add(netAway);
 
     // Helper: build a 3D player mesh
@@ -196,27 +202,27 @@ export function MatchView(): React.ReactElement | null {
       const group = new THREE.Group();
 
       const body = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.8, 0.8, 1.8, 14),
+        new THREE.CylinderGeometry(0.85, 0.85, 1.9, 14),
         new THREE.MeshStandardMaterial({ color: teamColor })
       );
-      body.position.y = 0.9;
+      body.position.y = 0.95;
       body.castShadow = true;
       body.receiveShadow = true;
       group.add(body);
 
       const head = new THREE.Mesh(
-        new THREE.SphereGeometry(0.55, 12, 12),
+        new THREE.SphereGeometry(0.6, 14, 14),
         new THREE.MeshStandardMaterial({ color: 0xe8e8e8 })
       );
-      head.position.y = 2.05;
+      head.position.y = 2.15;
       head.castShadow = true;
       group.add(head);
 
       const tag = new THREE.Mesh(
-        new THREE.RingGeometry(0.55, 0.75, 12),
+        new THREE.RingGeometry(0.6, 0.8, 14),
         new THREE.MeshBasicMaterial({ color: 0xffffff })
       );
-      tag.position.y = 2.65;
+      tag.position.y = 2.75;
       tag.rotation.x = -Math.PI / 2;
       group.add(tag);
 
@@ -240,28 +246,20 @@ export function MatchView(): React.ReactElement | null {
 
     // Ball
     const ballMesh = new THREE.Mesh(
-      new THREE.SphereGeometry(0.75, 20, 20),
+      new THREE.SphereGeometry(0.8, 22, 22),
       new THREE.MeshStandardMaterial({ color: 0xfacc15 })
     );
     ballMesh.position.set(
       engine.match.ball.pos.x,
-      0.75,
+      0.8,
       engine.match.ball.pos.y
     );
     ballMesh.castShadow = true;
     scene.add(ballMesh);
     ballMeshRef.current = ballMesh;
 
-    // Resize
-    const onResize = () => {
-      const cam = cameraRef.current;
-      const ren = rendererRef.current;
-      if (!cam || !ren) return;
-      cam.aspect = PITCH_W / PITCH_H;
-      cam.updateProjectionMatrix();
-      ren.setSize(PITCH_W, PITCH_H);
-    };
-    window.addEventListener('resize', onResize);
+    updateSize();
+    window.addEventListener('resize', updateSize);
 
     // Single game loop: update logic + render
     let last = performance.now();
@@ -303,13 +301,13 @@ export function MatchView(): React.ReactElement | null {
       // Update ball
       const b = ballMeshRef.current;
       if (b) {
-        b.position.set(match.ball.pos.x, 0.75, match.ball.pos.y);
+        b.position.set(match.ball.pos.x, 0.8, match.ball.pos.y);
       }
 
       // Camera follow the ball
       cam.position.x = THREE.MathUtils.lerp(cam.position.x, match.ball.pos.x, 0.1);
-      cam.position.z = THREE.MathUtils.lerp(cam.position.z, match.ball.pos.y + 600, 0.1);
-      cam.position.y = THREE.MathUtils.lerp(cam.position.y, 560, 0.1);
+      cam.position.z = THREE.MathUtils.lerp(cam.position.z, match.ball.pos.y + 650, 0.1);
+      cam.position.y = THREE.MathUtils.lerp(cam.position.y, 600, 0.1);
       cam.lookAt(match.ball.pos.x, 0, match.ball.pos.y);
 
       ren.render(scn, cam);
@@ -320,7 +318,7 @@ export function MatchView(): React.ReactElement | null {
     return () => {
       kb.disconnect();
       cancelAnimationFrame(rafRef.current);
-      window.removeEventListener('resize', onResize);
+      window.removeEventListener('resize', updateSize);
       rendererRef.current?.dispose();
     };
   }, []);
@@ -329,8 +327,16 @@ export function MatchView(): React.ReactElement | null {
   if (!match) return null;
 
   return (
-    <div className="relative w-full h-[680px] bg-[#020503] overflow-hidden rounded-2xl border border-white/10 shadow-2xl">
-      <canvas ref={canvasRef} className="block w-full h-full" />
+    <div
+      className="relative overflow-hidden rounded-2xl border border-white/10 shadow-2xl"
+      style={{ width: '100%', height: PITCH_H, backgroundColor: '#020503' }}
+    >
+      <canvas
+        ref={canvasRef}
+        width={PITCH_W}
+        height={PITCH_H}
+        className="block w-full h-full"
+      />
       <Scoreboard match={match} />
       <ControlsOverlay
         engine={engineRef.current}
